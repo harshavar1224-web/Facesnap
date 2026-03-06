@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+python-multipart
+# AI libs
+tensorflow
+keras
+opencv-python-headless
+deepface
+numpy
+scipy
+scikit-learn
+ffmpeg-python
+requests

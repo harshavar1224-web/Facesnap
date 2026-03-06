@@ -1,0 +1,33 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-slate-900 text-slate-100 font-sans min-h-screen selection:bg-primary/30 selection:text-white;
+    background: linear-gradient(135deg, #0f172a, #1e293b);
+    background-attachment: fixed;
+  }
+}
+
+@layer components {
+  .glass-card {
+    @apply bg-white/5 backdrop-blur-[20px] border border-white/10 rounded-2xl shadow-[0_8px_32px_0_rgba(0,0,0,0.37)];
+  }
+  
+  .glass-button {
+    @apply bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/10 rounded-xl transition-all duration-300;
+  }
+  
+  .btn-primary {
+    @apply bg-primary hover:bg-blue-500 text-white font-medium py-3 px-6 rounded-xl transition-all duration-300 shadow-[0_4px_15px_rgba(91,140,255,0.4)] hover:shadow-[0_6px_25px_rgba(91,140,255,0.6)];
+  }
+
+  .btn-accent {
+    @apply bg-accent hover:bg-purple-500 text-white font-medium py-3 px-6 rounded-xl transition-all duration-300 shadow-[0_4px_15px_rgba(143,107,255,0.4)] hover:shadow-[0_6px_25px_rgba(143,107,255,0.6)];
+  }
+
+  .glass-input {
+    @apply w-full bg-slate-800/40 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all backdrop-blur-sm shadow-inner;
+  }
+}
