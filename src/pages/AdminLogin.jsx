@@ -16,15 +16,20 @@ const AdminLogin = () => {
         setError('');
 
         try {
-            const res = await fetch('/api/admin/login', {
+            const API_URL = import.meta.env.VITE_API_URL || '';
+            const res = await fetch(`${API_URL}/api/admin/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
                 body: JSON.stringify({ email, password })
             });
 
             const data = await res.json();
 
             if (res.ok && data.success) {
+                if (data.token) {
+                    localStorage.setItem('admin_token', data.token);
+                }
                 // User is authenticated via HTTP-only simple cookie, jump to dashboard.
                 navigate('/admin');
             } else {

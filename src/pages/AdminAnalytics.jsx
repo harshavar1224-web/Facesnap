@@ -12,8 +12,8 @@ const AdminAnalytics = () => {
         const fetchReports = async () => {
             try {
                 const [anRes, stRes] = await Promise.all([
-                    fetch('/api/admin/analytics'),
-                    fetch('/api/admin/events/stats')
+                    fetch('/api/admin/analytics', { credentials: 'include' }),
+                    fetch('/api/admin/events/stats', { credentials: 'include' })
                 ]);
                 const anData = await anRes.json();
                 const stData = await stRes.json();

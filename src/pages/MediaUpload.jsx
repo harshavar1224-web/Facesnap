@@ -49,6 +49,7 @@ const MediaUpload = () => {
 
             const res = await fetch(`/api/upload/${eventId}`, {
                 method: 'POST',
+                credentials: 'include',
                 body: formData
             });
             const data = await res.json();

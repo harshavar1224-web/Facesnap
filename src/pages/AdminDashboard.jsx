@@ -36,15 +36,20 @@ const AdminDashboard = () => {
         img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
     };
 
-    // Create Event Modal state
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [isCreating, setIsCreating] = useState(false);
-    const [form, setForm] = useState({ name: '', date: '', location: '', cover_image: 'linear-gradient(135deg, #1e293b, #0f172a)' });
+    const [form, setForm] = useState({ name: '', date: '', location: '', coverImage: null, notifications_enabled: false });
 
     const fetchEvents = async () => {
         try {
             setLoading(true);
-            const res = await fetch('/api/admin/events/stats');
+            const API_URL = import.meta.env.VITE_API_URL || '';
+            const res = await fetch(`${API_URL}/api/admin/events/stats`, {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
+                },
+                credentials: 'include'
+            });
             const data = await res.json();
             if (res.ok) setEvents(data.stats || []);
         } catch (err) {
@@ -63,24 +68,43 @@ const AdminDashboard = () => {
         if (!form.name || !form.date || !form.location) return;
 
         setIsCreating(true);
+        console.log("Submitting Event Creating Request:", form);
         try {
-            const res = await fetch('/api/events', {
+            const formData = new FormData();
+            formData.append('name', form.name);
+            formData.append('date', form.date);
+            formData.append('location', form.location);
+            formData.append('notifications_enabled', form.notifications_enabled);
+            if (form.coverImage && form.coverImage instanceof File) {
+                formData.append('coverImage', form.coverImage);
+            }
+
+            const API_URL = import.meta.env.VITE_API_URL || '';
+            const res = await fetch(`${API_URL}/api/events`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(form)
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
+                },
+                credentials: 'include',
+                body: formData
             });
+            console.log("Response Status:", res.status);
             const data = await res.json();
+            console.log("Response Data:", data);
 
             if (res.ok && data.success) {
-                setForm({ name: '', date: '', location: '', cover_image: 'linear-gradient(135deg, #1e293b, #0f172a)' });
+                setForm({ name: '', date: '', location: '', coverImage: null, notifications_enabled: false });
                 setIsCreateModalOpen(false);
                 fetchEvents(); // refresh list
                 setViewMode('events'); // switch back to events if created
+                alert("Event Created Successfully!");
             } else {
                 alert("Error creating event: " + (data.error || 'Server error'));
+                console.error("Event Creation Error from Server:", data.error);
             }
         } catch (err) {
-            console.error(err);
+            console.error("Network or parsing error during Event Creation:", err);
+            alert("Network Error during event creation. See console.");
         } finally {
             setIsCreating(false);
         }
@@ -90,9 +114,14 @@ const AdminDashboard = () => {
         if (!confirm("Generate a highlight reel for this event? This will process all ready videos and may take a few moments.")) return;
         setGeneratingHighlightFor(eventId);
         try {
-            const res = await fetch(`/api/events/highlight/${eventId}`, {
+            const API_URL = import.meta.env.VITE_API_URL || '';
+            const res = await fetch(`${API_URL}/api/events/highlight/${eventId}`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
+                },
+                credentials: 'include'
             });
             const data = await res.json();
             if (res.ok && data.success) {
@@ -106,6 +135,26 @@ const AdminDashboard = () => {
             alert("Failed to reach server.");
         } finally {
             setGeneratingHighlightFor(null);
+        }
+    };
+
+    const handleToggleNotifications = async (eventId, currentStatus) => {
+        try {
+            const res = await fetch(`/api/events/${eventId}/notifications`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ enabled: !currentStatus })
+            });
+            const data = await res.json();
+            if (res.ok && data.success) {
+                fetchEvents();
+            } else {
+                alert("Error toggling notifications");
+            }
+        } catch (err) {
+            console.error("Toggle Notifications Error:", err);
+            alert("Network error.");
         }
     };
 
@@ -173,6 +222,21 @@ const AdminDashboard = () => {
                                             <span>{evt.photos} Photos, {evt.videos} Videos</span>
                                             <span className="w-1 h-1 rounded-full bg-slate-600 self-center"></span>
                                             <span className="text-green-400 font-medium">Participants: {evt.participants || 0}</span>
+                                        </div>
+                                        <div className="mt-3 flex items-center gap-2">
+                                            <label className="flex items-center gap-2 cursor-pointer">
+                                                <div className="relative">
+                                                    <input
+                                                        type="checkbox"
+                                                        className="sr-only"
+                                                        checked={evt.notifications_enabled}
+                                                        onChange={() => handleToggleNotifications(evt._id, evt.notifications_enabled)}
+                                                    />
+                                                    <div className={`block w-10 h-6 rounded-full transition-colors ${evt.notifications_enabled ? 'bg-primary' : 'bg-slate-700'}`}></div>
+                                                    <div className={`dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${evt.notifications_enabled ? 'translate-x-4' : 'translate-x-0'}`}></div>
+                                                </div>
+                                                <span className="text-xs text-slate-400">Enable attendee notifications</span>
+                                            </label>
                                         </div>
                                     </div>
 
@@ -279,13 +343,26 @@ const AdminDashboard = () => {
                                     <input required type="text" value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} className="glass-input" placeholder="e.g. Studio Complex" />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-300 mb-1">Cover Image Style</label>
-                                    <select value={form.cover_image} onChange={e => setForm({ ...form, cover_image: e.target.value })} className="glass-input bg-slate-800 text-white">
-                                        <option value="linear-gradient(135deg, #0f172a, #1e293b)">Dark Default Gradient</option>
-                                        <option value="linear-gradient(135deg, #10b981, #047857)">Emerald Gradient</option>
-                                        <option value="linear-gradient(135deg, #3b82f6, #1d4ed8)">Blue Gradient</option>
-                                        <option value="linear-gradient(135deg, #ec4899, #be185d)">Pink Gradient</option>
-                                    </select>
+                                    <label className="block text-sm font-medium text-slate-300 mb-1">Cover Image (Optional)</label>
+                                    <input
+                                        type="file"
+                                        accept="image/*"
+                                        onChange={e => setForm({ ...form, coverImage: e.target.files[0] })}
+                                        className="glass-input text-white file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-blue-600 cursor-pointer"
+                                    />
+                                </div>
+                                <div className="flex items-center gap-3 pt-2">
+                                    <div className="relative">
+                                        <input
+                                            type="checkbox"
+                                            className="sr-only"
+                                            checked={form.notifications_enabled}
+                                            onChange={e => setForm({ ...form, notifications_enabled: e.target.checked })}
+                                        />
+                                        <div className={`block w-12 h-7 rounded-full transition-colors ${form.notifications_enabled ? 'bg-primary' : 'bg-slate-700'}`}></div>
+                                        <div className={`dot absolute left-1 top-1 bg-white w-5 h-5 rounded-full transition-transform ${form.notifications_enabled ? 'translate-x-5' : 'translate-x-0'}`}></div>
+                                    </div>
+                                    <span className="text-sm text-slate-300 font-medium">Enable Instant Notifications</span>
                                 </div>
 
                                 <button type="submit" disabled={isCreating} className="btn-primary w-full mt-6 flex justify-center py-3">

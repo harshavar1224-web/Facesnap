@@ -13,6 +13,7 @@ const Media = require('../models/Media');
 const FaceEmbedding = require('../models/FaceEmbedding');
 const FaceCluster = require('../models/FaceCluster');
 const ClusterMediaMap = require('../models/ClusterMediaMap');
+const ScanSession = require('../models/ScanSession');
 
 const router = express.Router();
 
@@ -105,7 +106,7 @@ router.post('/admin/login', async (req, res) => {
             maxAge: 24 * 60 * 60 * 1000 // 1 day
         });
 
-        res.json({ success: true });
+        res.json({ success: true, token });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -119,13 +120,35 @@ router.post('/admin/logout', (req, res) => {
 /**
  * 1. Create Event (Protected)
  */
-router.post('/events', authMiddleware, async (req, res) => {
+router.post('/events', authMiddleware, upload.single('coverImage'), async (req, res) => {
     try {
-        const { name, date, location, cover_image } = req.body;
-        const event = new Event({ name, date, location, cover_image });
+        console.log("POST /events hit! User Token Decoded:", req.admin);
+        const { name, date, location, notifications_enabled } = req.body;
+        console.log("Creating new event with payload:", req.body);
+
+        let coverImageUrl = 'linear-gradient(135deg, #1e293b, #0f172a)'; // default
+
+        if (req.file) {
+            coverImageUrl = req.file.location ? req.file.location : `/uploads/${req.file.filename}`;
+            console.log("Uploaded cover image:", coverImageUrl);
+        } else if (req.body.coverImage || req.body.cover_image) {
+            coverImageUrl = req.body.coverImage || req.body.cover_image;
+        }
+
+        const event = new Event({
+            name,
+            date,
+            location,
+            coverImage: coverImageUrl,
+            notifications_enabled: notifications_enabled === 'true' || notifications_enabled === true,
+            createdBy: req.admin?.id
+        });
         await event.save();
+
+        console.log("Event created successfully:", event._id);
         res.status(201).json({ success: true, event });
     } catch (err) {
+        console.error("Failed to create event:", err.message);
         res.status(500).json({ error: err.message });
     }
 });
@@ -137,6 +160,19 @@ router.get('/events', async (req, res) => {
     try {
         const events = await Event.find().sort({ createdAt: -1 });
         res.json({ success: true, events });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+/**
+ * 2.1 Toggle Event Notifications (Protected)
+ */
+router.patch('/events/:eventId/notifications', authMiddleware, async (req, res) => {
+    try {
+        const { enabled } = req.body;
+        const evt = await Event.findByIdAndUpdate(req.params.eventId, { notifications_enabled: enabled }, { new: true });
+        res.json({ success: true, notifications_enabled: evt.notifications_enabled });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -216,7 +252,6 @@ router.post('/upload/:eventId', authMiddleware, upload.array('files', 10), async
             // Create media object
             // Use the cloud Location if available, else local path
             const mediaUrl = file.location ? file.location : `/uploads/${file.filename}`;
-            const mediaType = ['.mp4', '.mov', '.avi'].includes(ext) ? 'video' : 'photo';
 
             const media = new Media({
                 event_id: eventId,
@@ -290,6 +325,8 @@ router.post('/upload/:eventId', authMiddleware, upload.array('files', 10), async
         if (facesCount > 0) {
             // Background clustering for immediate photo uploads
             runEventClustering(eventId);
+        } else {
+            // Even if no faces, we might need to trigger notifications for previously clustered? Not needed if no faces.
         }
 
         res.json({ success: true, files_processed: processedCount, faces_extracted: facesCount });
@@ -402,8 +439,102 @@ async function runEventClustering(eventId) {
                 }
             }
         }
+
+        // Trigger notifications for any unmatched/unnotified sessions
+        triggerNotifications(eventId);
+
     } catch (err) {
         console.error("Clustering failed:", err.message);
+    }
+}
+
+async function triggerNotifications(eventId) {
+    try {
+        const event = await Event.findById(eventId);
+        if (!event || !event.notifications_enabled) return;
+
+        // Find sessions that haven't been notified yet
+        const sessions = await ScanSession.find({ event_id: eventId, notified: false, email: { $ne: null } });
+        if (sessions.length === 0) return;
+
+        const clusters = await FaceCluster.find({ event_id: eventId });
+
+        // Setup Ethereal for testing
+        let testAccount = await nodemailer.createTestAccount();
+        let transporter = nodemailer.createTransport({
+            host: "smtp.ethereal.email",
+            port: 587,
+            secure: false,
+            auth: {
+                user: testAccount.user,
+                pass: testAccount.pass,
+            },
+        });
+
+        for (const session of sessions) {
+            let bestCluster = null;
+            let bestDistance = 1.0;
+            const threshold = 0.35;
+
+            for (const cl of clusters) {
+                const targetVec = cl.representative_embedding;
+                let dotProduct = 0;
+                let normA = 0;
+                let normB = 0;
+                for (let i = 0; i < session.embedding_vector.length; i++) {
+                    dotProduct += session.embedding_vector[i] * targetVec[i];
+                    normA += session.embedding_vector[i] * session.embedding_vector[i];
+                    normB += targetVec[i] * targetVec[i];
+                }
+                const distance = 1 - (dotProduct / (Math.sqrt(normA) * Math.sqrt(normB)));
+
+                if (distance < threshold && distance < bestDistance) {
+                    bestCluster = cl;
+                    bestDistance = distance;
+                }
+            }
+
+            if (bestCluster) {
+                const mappings = await ClusterMediaMap.find({ cluster_id: bestCluster._id }).populate('media_id');
+                const uniquePhotos = new Set();
+                const uniqueVideos = new Set();
+
+                for (const mObj of mappings) {
+                    if (!mObj.media_id) continue;
+                    if (mObj.media_id.media_type === 'photo') uniquePhotos.add(mObj.media_id._id.toString());
+                    if (mObj.media_id.media_type === 'video') uniqueVideos.add(mObj.media_id._id.toString() + '_' + mObj.timestamp);
+                }
+
+                if (uniquePhotos.size > 0 || uniqueVideos.size > 0) {
+                    // Send Email
+                    const galleryLink = `http://localhost:5173/gallery/${eventId}?sessionId=${session._id}`; // use real origin in prod
+
+                    let info = await transporter.sendMail({
+                        from: '"Media Club" <noreply@mediaclub.app>',
+                        to: session.email,
+                        subject: `Your photos from ${event.name} are ready!`,
+                        html: `
+                            <div style="font-family: Arial, sans-serif; max-w-md; margin: 0 auto; padding: 20px; color: #333;">
+                                <h2>Hi there,</h2>
+                                <p>We found <strong>${uniquePhotos.size}</strong> photos and <strong>${uniqueVideos.size}</strong> video moments where you appear.</p>
+                                <p>View and download your media securely via the link below:</p>
+                                <a href="${galleryLink}" style="display: inline-block; padding: 12px 24px; background-color: #5B8CFF; color: white; text-decoration: none; border-radius: 8px; font-weight: bold; margin-top: 10px;">View My Gallery</a>
+                                <p style="margin-top: 30px; font-size: 12px; color: #888;">If you did not request this, please ignore this email.</p>
+                            </div>
+                        `,
+                    });
+
+                    console.log(`Notification sent to ${session.email}. Preview: ${nodemailer.getTestMessageUrl(info)}`);
+
+                    // Update session
+                    session.cluster_id = bestCluster._id;
+                    session.notified = true;
+                    await session.save();
+                }
+            }
+        }
+    } catch (err) {
+        console.error("Trigger Notifications Error:", err);
     }
 }
 
@@ -423,6 +554,9 @@ router.post('/scan/:eventId', upload.single('face'), async (req, res) => {
         const extractRes = await axios.post(`${AI_URL}/extract`, formData, {
             headers: formData.getHeaders(),
         });
+
+        const email = req.body.email || null;
+        const phone = req.body.phone || null;
 
         const faces = extractRes.data.faces;
         if (!faces || faces.length === 0) {
@@ -501,10 +635,24 @@ router.post('/scan/:eventId', upload.single('face'), async (req, res) => {
             }
         });
 
-        // Track scan
+        // Track ScanSession and link cluster
+        let sessionObj = null;
+        if (email) {
+            sessionObj = new ScanSession({
+                event_id: eventId,
+                email: email,
+                phone: phone,
+                embedding_vector: sourceEmbedding,
+                cluster_id: bestCluster ? bestCluster._id : null,
+                notified: true // they are viewing right now, so mark notified
+            });
+            await sessionObj.save();
+        }
+
+        // Track scan metric
         await Event.findByIdAndUpdate(eventId, { $inc: { scans: 1 } });
 
-        res.json({ success: true, matches: matchedMediaObjects, distance_threshold: threshold });
+        res.json({ success: true, matches: matchedMediaObjects, distance_threshold: threshold, sessionId: sessionObj ? sessionObj._id : null });
 
     } catch (err) {
         console.error(err);
@@ -701,6 +849,7 @@ router.get('/admin/events/stats', authMiddleware, async (req, res) => {
                 videos: videoCount,
                 processing: processingCount,
                 participants: participantsCount,
+                notifications_enabled: evt.notifications_enabled || false,
                 createdAt: evt.createdAt
             }
         }));
