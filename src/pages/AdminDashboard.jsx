@@ -38,7 +38,7 @@ const AdminDashboard = () => {
 
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [isCreating, setIsCreating] = useState(false);
-    const [form, setForm] = useState({ name: '', date: '', location: '', coverImage: null, notifications_enabled: false });
+    const [form, setForm] = useState({ name: '', date: '', location: '', coverImage: '', coverImageFile: null, notifications_enabled: false });
 
     const fetchEvents = async () => {
         try {
@@ -69,16 +69,21 @@ const AdminDashboard = () => {
 
         setIsCreating(true);
         console.log("Submitting Event Creating Request:", form);
-        try {
-            const formData = new FormData();
-            formData.append('name', form.name);
-            formData.append('date', form.date);
-            formData.append('location', form.location);
-            formData.append('notifications_enabled', form.notifications_enabled);
-            if (form.coverImage && form.coverImage instanceof File) {
-                formData.append('coverImage', form.coverImage);
-            }
 
+        const formData = new FormData();
+        formData.append('name', form.name);
+        formData.append('date', form.date);
+        formData.append('location', form.location);
+        formData.append('notifications_enabled', form.notifications_enabled);
+
+        if (form.coverImageFile) {
+            formData.append('coverImage', form.coverImageFile);
+        } else {
+            // Default fallback if no file is chosen
+            formData.append('coverImage', 'linear-gradient(135deg, #1e293b, #0f172a)');
+        }
+
+        try {
             const API_URL = import.meta.env.VITE_API_URL || '';
             const res = await fetch(`${API_URL}/api/events`, {
                 method: 'POST',
@@ -93,7 +98,7 @@ const AdminDashboard = () => {
             console.log("Response Data:", data);
 
             if (res.ok && data.success) {
-                setForm({ name: '', date: '', location: '', coverImage: null, notifications_enabled: false });
+                setForm({ name: '', date: '', location: '', coverImage: '', coverImageFile: null, notifications_enabled: false });
                 setIsCreateModalOpen(false);
                 fetchEvents(); // refresh list
                 setViewMode('events'); // switch back to events if created
@@ -347,8 +352,8 @@ const AdminDashboard = () => {
                                     <input
                                         type="file"
                                         accept="image/*"
-                                        onChange={e => setForm({ ...form, coverImage: e.target.files[0] })}
-                                        className="glass-input text-white file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-blue-600 cursor-pointer"
+                                        onChange={e => setForm({ ...form, coverImageFile: e.target.files[0] })}
+                                        className="glass-input text-white file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-blue-600 w-full"
                                     />
                                 </div>
                                 <div className="flex items-center gap-3 pt-2">
