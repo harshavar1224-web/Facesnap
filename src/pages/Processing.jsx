@@ -38,7 +38,8 @@ const Processing = () => {
                 if (phone) formData.append('phone', phone);
 
                 // Fetch to Express API
-                const apiRes = await fetch(`/api/scan/${eventId}`, {
+                const API_URL = import.meta.env.VITE_API_URL || '';
+                const apiRes = await fetch(`${API_URL}/api/scan/${eventId}`, {
                     method: 'POST',
                     body: formData
                 });

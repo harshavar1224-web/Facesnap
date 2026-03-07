@@ -11,6 +11,8 @@ const PersonalGallery = () => {
     const [emailSending, setEmailSending] = useState(false);
     const [emailPreview, setEmailPreview] = useState(null);
 
+    const API_URL = import.meta.env.VITE_API_URL || '';
+
     // Matched Media from backend API via Processing page
     const [matchedPhotos, setMatchedPhotos] = useState([]);
     const [matchedVideos, setMatchedVideos] = useState([]);
@@ -62,7 +64,7 @@ const PersonalGallery = () => {
     const handleDownload = (url) => {
         // A simple anchor download for now
         const a = document.createElement('a');
-        a.href = `/api${url}`; // We proxy the backend path
+        a.href = `${API_URL}/api${url}`; // We proxy the backend path
         a.download = url.split('/').pop() || 'media';
         document.body.appendChild(a);
         a.click();
@@ -95,12 +97,12 @@ const PersonalGallery = () => {
                         className="glass-card overflow-hidden group relative aspect-[4/3] shadow-lg rounded-2xl border border-white/10 bg-slate-800"
                     >
                         {type === 'photos' ? (
-                            <img src={`/api${media.url}`} alt={`Match ${i}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
+                            <img src={`${API_URL}/api${media.url}`} alt={`Match ${i}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
                         ) : (
                             media.match_thumbnail ? (
-                                <img src={`/api${media.match_thumbnail}`} alt={`Match ${i}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
+                                <img src={`${API_URL}/api${media.match_thumbnail}`} alt={`Match ${i}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
                             ) : (
-                                <video src={`/api${media.url}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" controls={false} />
+                                <video src={`${API_URL}/api${media.url}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" controls={false} />
                             )
                         )}
 
@@ -126,7 +128,7 @@ const PersonalGallery = () => {
                                     </button>
                                 </div>
                                 {type === 'videos' && media.match_timestamp !== undefined ? (
-                                    <button onClick={() => window.open(`/api${media.url}#t=${media.match_timestamp}`, '_blank')} className="btn-accent py-2 px-4 shadow-[0_0_15px_rgba(91,140,255,0.4)] flex items-center gap-2 text-sm z-10 transition-transform hover:scale-105">
+                                    <button onClick={() => window.open(`${API_URL}/api${media.url}#t=${media.match_timestamp}`, '_blank')} className="btn-accent py-2 px-4 shadow-[0_0_15px_rgba(91,140,255,0.4)] flex items-center gap-2 text-sm z-10 transition-transform hover:scale-105">
                                         <Play size={16} fill="white" /> Play from {formatTime(media.match_timestamp)}
                                     </button>
                                 ) : (
@@ -152,7 +154,7 @@ const PersonalGallery = () => {
             // Give immediate feedback
             alert("Preparing your ZIP file... This may take a few seconds.");
 
-            const res = await fetch('/api/download-all', {
+            const res = await fetch(`${API_URL}/api/download-all`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ mediaIds })
@@ -181,7 +183,7 @@ const PersonalGallery = () => {
         if (!emailInput) return;
         setEmailSending(true);
         try {
-            const res = await fetch('/api/send-notification', {
+            const res = await fetch(`${API_URL}/api/send-notification`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

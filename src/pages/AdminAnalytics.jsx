@@ -11,9 +11,10 @@ const AdminAnalytics = () => {
     useEffect(() => {
         const fetchReports = async () => {
             try {
+                const API_URL = import.meta.env.VITE_API_URL || '';
                 const [anRes, stRes] = await Promise.all([
-                    fetch('/api/admin/analytics', { credentials: 'include' }),
-                    fetch('/api/admin/events/stats', { credentials: 'include' })
+                    fetch(`${API_URL}/api/admin/analytics`, { credentials: 'include' }),
+                    fetch(`${API_URL}/api/admin/events/stats`, { credentials: 'include' })
                 ]);
                 const anData = await anRes.json();
                 const stData = await stRes.json();

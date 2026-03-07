@@ -13,7 +13,8 @@ const EventSelection = () => {
         const fetchEvents = async () => {
             try {
                 setLoading(true);
-                const res = await fetch('/api/events');
+                const API_URL = import.meta.env.VITE_API_URL || '';
+                const res = await fetch(`${API_URL}/api/events`);
                 const data = await res.json();
 
                 if (!res.ok) throw new Error(data.error || "Failed to fetch events");

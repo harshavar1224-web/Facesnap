@@ -47,7 +47,8 @@ const MediaUpload = () => {
             // To simulate the two stages, we jump to 'indexing' after 1s visually
             setTimeout(() => setUploadState('indexing'), 1000);
 
-            const res = await fetch(`/api/upload/${eventId}`, {
+            const API_URL = import.meta.env.VITE_API_URL || '';
+            const res = await fetch(`${API_URL}/api/upload/${eventId}`, {
                 method: 'POST',
                 credentials: 'include',
                 body: formData

@@ -79,8 +79,8 @@ const AdminDashboard = () => {
         if (form.coverImageFile) {
             formData.append('coverImage', form.coverImageFile);
         } else {
-            // Default fallback if no file is chosen
-            formData.append('coverImage', 'linear-gradient(135deg, #1e293b, #0f172a)');
+            // Use selected gradient if no file is chosen
+            formData.append('coverImage', form.coverImage || 'linear-gradient(135deg, #1e293b, #0f172a)');
         }
 
         try {
@@ -145,7 +145,8 @@ const AdminDashboard = () => {
 
     const handleToggleNotifications = async (eventId, currentStatus) => {
         try {
-            const res = await fetch(`/api/events/${eventId}/notifications`, {
+            const API_URL = import.meta.env.VITE_API_URL || '';
+            const res = await fetch(`${API_URL}/api/events/${eventId}/notifications`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
