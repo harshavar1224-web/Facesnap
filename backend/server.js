@@ -14,7 +14,11 @@ app.use(helmet());
 app.use(helmet.crossOriginResourcePolicy({ policy: "cross-origin" }));
 
 app.use(cors({
-    origin: process.env.FRONTEND_URL || ['http://localhost:5173', 'http://localhost:3000'],
+    origin: [
+        "https://facesnap-plum.vercel.app",
+        "http://localhost:5173"
+    ],
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     credentials: true
 }));
 
